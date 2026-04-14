@@ -1,5 +1,3 @@
-SQL migrations are maintained in a **single directory at the repository root**: **`../../migrations/`** (not here).
+SQL migrations for Fintrack live in this directory: ordered `*.sql` files applied on **Go API** startup (and optionally via **`deploy/docker/scripts/run-migrations.sh`**).
 
-The Go API sets **`MIGRATIONS_PATH`** to that folder (defaulting to `../migrations` when run from **`api/`**, or `/migrations` in Docker / baked into the image).
-
-This folder exists only so tooling that expects an `api/migrations` path has a pointer to the canonical location.
+**Path resolution:** the API uses **`MIGRATIONS_PATH`** when set; otherwise it looks for **`api/migrations`** relative to the current working directory (run from **`api/`** or the repo root), or **`/migrations`** in the Docker image.

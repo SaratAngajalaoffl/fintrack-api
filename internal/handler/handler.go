@@ -31,6 +31,24 @@ func NewMux(deps Deps) http.Handler {
 			JWTSecret: deps.JWTSecret,
 		}
 		b.RegisterBankAccounts(mux)
+
+		e := &ExpenseCategories{
+			DB:        deps.DB,
+			JWTSecret: deps.JWTSecret,
+		}
+		e.RegisterExpenseCategories(mux)
+
+		c := &CreditCards{
+			DB:        deps.DB,
+			JWTSecret: deps.JWTSecret,
+		}
+		c.RegisterCreditCards(mux)
+
+		f := &FundBuckets{
+			DB:        deps.DB,
+			JWTSecret: deps.JWTSecret,
+		}
+		f.RegisterFundBuckets(mux)
 	}
 
 	return mux

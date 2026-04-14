@@ -61,7 +61,7 @@ func main() {
 		JWTSecret:    cfg.JWTSecret,
 		CookieSecure: cfg.CookieSecure,
 	})
-	h := middleware.Chain(mux, middleware.Logging)
+	h := middleware.Chain(mux, middleware.CORS(cfg.CORSAllowedOrigins), middleware.Logging)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

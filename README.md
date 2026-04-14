@@ -1,6 +1,6 @@
 # Fintrack API (Go)
 
-HTTP API for Fintrack. The Next.js app lives in **`../web/`**. SQL migrations remain the **single source of truth** at the repository root: **`../migrations/`** (not duplicated under `api/`).
+HTTP API for Fintrack. The Next.js app lives in **`../web/`**. SQL migrations live under **`migrations/`** in this module (**`api/migrations/`**).
 
 ## Layout
 
@@ -19,15 +19,16 @@ go run ./cmd/api
 ```
 
 - **Health:** `GET http://localhost:8080/health`
-- **Auth:** all **`/api/auth/*`** routes (session cookie `fintrack_session`, bcrypt passwords, JWT OTP tickets).
-- **Bank accounts:** **`/api/bank-accounts`** (`GET`/`POST` list + create, **`/{id}`** `GET`/`PATCH`/`DELETE`) — same JSON shapes as the former Next Route Handlers.
+- **Auth:** **`/api/auth/*`** (session cookie `fintrack_session`, bcrypt passwords, JWT OTP tickets).
+- **Bank accounts, credit cards, expense categories:** CRUD-style **`/api/...`** routes (see **`web/src/configs/api-routes.ts`**).
+- **Fund buckets:** list/create plus **`/allocate`**, **`/unlock`**, **`/priority`** actions.
 - Migrations apply automatically on startup unless **`SKIP_MIGRATIONS=true`** or **`1`**.
 
-**With Next.js on your machine:** run the API on **:8080** and set **`web/.env.local`** (see **`web/.env.example`**) so **`API_ORIGIN=http://127.0.0.1:8080`** and **`JWT_SECRET`** matches this service. **`next.config.ts`** rewrites same-origin **`/api/auth/*`** and **`/api/bank-accounts`** to the Go server.
+**With Next.js on your machine:** run the API on **:8080** and align **`web/.env.local`** with **`web/.env.example`** (**`JWT_SECRET`**, optional **`NEXT_PUBLIC_API_ORIGIN`** / **`API_ORIGIN`**). **`getApiRoute()`** in **`web/src/configs/api-routes.ts`** builds URLs for both browser and server-side calls. This API sends **CORS** headers for allowed origins (see **`CORS_ALLOWED_ORIGINS`** in **`api/.env.example`**) when the browser calls the Go origin directly.
 
 ## Docker / Compose
 
-In Compose, **`DATABASE_URL`** targets the `postgres` service and **`MIGRATIONS_PATH=/migrations`** with the repo’s `migrations/` directory mounted read-only.
+In Compose, **`DATABASE_URL`** targets the `postgres` service; migrations are baked into the API image at **`/migrations`**, and dev Compose can bind-mount **`api/migrations`** there for local edits without rebuilding.
 
 ## Makefile
 
