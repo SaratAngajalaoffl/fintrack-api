@@ -36,6 +36,7 @@ See **`Makefile`** (`make run`, `make build`, `make test`, `make test-cover`).
 
 - **`make test`** — `go test ./...` (unit + integration; integration uses **testcontainers** and needs **Docker**).
 - **`make test-cover`** — same with **`-coverpkg=./internal/...,./pkg/...`** and writes **`coverage.out`** for `go tool cover`.
+- **`make lint`** — **`golangci-lint`** when installed, else **`go vet`**. With **Go 1.25** in **`go.mod`**, install **golangci-lint v2** (v1.x is built with Go 1.24 and errors on 1.25 projects). CI pins a v2 release in **`.github/workflows/ci.yml`**.
 
 ## Seeding
 
