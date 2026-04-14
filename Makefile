@@ -9,6 +9,11 @@ build:
 test:
 	go test ./...
 
+# Cross-package coverage (integration tests exercise handlers + repository via HTTP).
+test-cover:
+	go test ./... -covermode=atomic -coverpkg=./internal/...,./pkg/... -coverprofile=coverage.out
+	go tool cover -func=coverage.out | tail -n 1
+
 fmt:
 	gofmt -s -w .
 

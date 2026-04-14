@@ -32,7 +32,10 @@ The API image is defined in **`api/deploy/Dockerfile`**. **Build context:** **`a
 
 ## Makefile
 
-See **`Makefile`** (`make run`, `make build`, `make test`).
+See **`Makefile`** (`make run`, `make build`, `make test`, `make test-cover`).
+
+- **`make test`** — `go test ./...` (unit + integration; integration uses **testcontainers** and needs **Docker**).
+- **`make test-cover`** — same with **`-coverpkg=./internal/...,./pkg/...`** and writes **`coverage.out`** for `go tool cover`.
 
 ## Seeding
 
