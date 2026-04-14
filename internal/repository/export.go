@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ExportAccountPayload matches the JSON shape from web account-data GET (schemaVersion 1).
+// ExportAccountPayload matches the JSON shape from GET /api/auth/account-data (schemaVersion 1).
 func ExportAccountPayload(ctx context.Context, pool *pgxpool.Pool, userID string) ([]byte, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -62,7 +62,7 @@ func ExportAccountPayload(ctx context.Context, pool *pgxpool.Pool, userID string
 	if err != nil {
 		return nil, err
 	}
-	buckets, err := collectBankBuckets(ctx, tx, userID)
+	fundBuckets, err := collectFundBuckets(ctx, tx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func ExportAccountPayload(ctx context.Context, pool *pgxpool.Pool, userID string
 		"user":               u,
 		"userProfile":        prof,
 		"bankAccounts":       bankAccounts,
-		"bankAccountBuckets": buckets,
+		"fundBuckets":        fundBuckets,
 		"creditCards":        cc,
 		"creditCardBills":    bills,
 		"expenseCategories":  cats,
@@ -162,11 +162,11 @@ func collectBankAccounts(ctx context.Context, tx pgx.Tx, userID string) ([]map[s
 	return out, rows.Err()
 }
 
-func collectBankBuckets(ctx context.Context, tx pgx.Tx, userID string) ([]map[string]any, error) {
+func collectFundBuckets(ctx context.Context, tx pgx.Tx, userID string) ([]map[string]any, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT id, bank_account_id, user_id, name, allocated_amount::text,
-              created_at::text, updated_at::text
-       FROM bank_account_buckets
+		`SELECT id, user_id, bank_account_id, name, target_amount::text, current_value::text,
+              is_locked, priority::text, created_at::text, updated_at::text
+       FROM fund_buckets
        WHERE user_id = $1
        ORDER BY created_at ASC`, userID)
 	if err != nil {
@@ -175,13 +175,19 @@ func collectBankBuckets(ctx context.Context, tx pgx.Tx, userID string) ([]map[st
 	defer rows.Close()
 	var out []map[string]any
 	for rows.Next() {
-		var id, baid, uid, name, amt, created, updated string
-		if err := rows.Scan(&id, &baid, &uid, &name, &amt, &created, &updated); err != nil {
+		var (
+			id, uid, baid, name, target, current, pri, created, updated string
+			locked                                                        bool
+		)
+		if err := rows.Scan(
+			&id, &uid, &baid, &name, &target, &current, &locked, &pri, &created, &updated,
+		); err != nil {
 			return nil, err
 		}
 		out = append(out, map[string]any{
-			"id": id, "bank_account_id": baid, "user_id": uid, "name": name,
-			"allocated_amount": amt, "created_at": created, "updated_at": updated,
+			"id": id, "user_id": uid, "bank_account_id": baid, "name": name,
+			"target_amount": target, "current_value": current, "is_locked": locked,
+			"priority": pri, "created_at": created, "updated_at": updated,
 		})
 	}
 	return out, rows.Err()

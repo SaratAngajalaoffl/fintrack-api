@@ -72,12 +72,9 @@ func Load() (Config, error) {
 	}, nil
 }
 
-// resolveMigrationsPath returns MIGRATIONS_PATH when set; otherwise finds api/migrations
-// (cwd api/ or repo root) or /migrations (Docker image).
+// resolveMigrationsPath finds the api migrations directory: /migrations in Docker images,
+// otherwise ./migrations when the process cwd is api/, or ./api/migrations from the repo root.
 func resolveMigrationsPath() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("MIGRATIONS_PATH")); v != "" {
-		return filepath.Clean(v), nil
-	}
 	if fi, err := os.Stat("/migrations"); err == nil && fi.IsDir() {
 		return "/migrations", nil
 	}
@@ -94,5 +91,5 @@ func resolveMigrationsPath() (string, error) {
 			return filepath.Clean(p), nil
 		}
 	}
-	return "", fmt.Errorf("migrations directory not found (expected api/migrations, or /migrations in Docker); set MIGRATIONS_PATH to override")
+	return "", fmt.Errorf("migrations directory not found: run the API with cwd api/ (expects api/migrations), or use an image with /migrations")
 }

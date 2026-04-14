@@ -13,8 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Run applies pending *.sql files in lexicographic order, recording each filename in schema_migrations
-// (same behavior as deploy/docker/scripts/run-migrations.sh).
+// Run applies pending *.sql files in lexicographic order, recording each filename in schema_migrations.
 func Run(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
 	entries, err := os.ReadDir(migrationsDir)
 	if err != nil {

@@ -31,7 +31,6 @@ type BankAccountRow struct {
 	Balance             float64  `json:"balance"`
 	CreditsThisMonth    float64  `json:"creditsThisMonth"`
 	DebitsThisMonth     float64  `json:"debitsThisMonth"`
-	BucketNames         []string `json:"bucketNames"`
 	PreferredCategories []string `json:"preferredCategories"`
 }
 
@@ -43,7 +42,6 @@ type CreateBankAccountInput struct {
 	InitialBalance      float64
 	LastDebitAt         *string
 	LastCreditAt        *string
-	Buckets             []string
 	PreferredCategories []string
 }
 
@@ -56,7 +54,6 @@ type UpdateBankAccountInput struct {
 	Balance      *float64
 	LastDebitAt  *string
 	LastCreditAt *string
-	Buckets      *[]string
 	PreferredCat *[]string
 }
 
@@ -68,21 +65,12 @@ const bankAccountSelect = `
         ba.account_type::text,
         ba.balance::float8,
         COALESCE(
-          ARRAY_AGG(DISTINCT bab.name ORDER BY bab.name) FILTER (
-            WHERE bab.id IS NOT NULL
-          ),
-          '{}'
-        ) AS bucket_names,
-        COALESCE(
           ARRAY_AGG(DISTINCT ec.name ORDER BY ec.name) FILTER (
             WHERE ec.name IS NOT NULL
           ),
           '{}'
         ) AS preferred_categories
       FROM bank_accounts ba
-      LEFT JOIN bank_account_buckets bab
-        ON bab.bank_account_id = ba.id
-       AND bab.user_id = ba.user_id
       LEFT JOIN bank_account_preferred_categories bapc
         ON bapc.bank_account_id = ba.id
        AND bapc.user_id = ba.user_id
@@ -94,11 +82,8 @@ const bankAccountSelect = `
 func mapBankAccountRow(
 	id, name, description, accountType string,
 	balance float64,
-	bucketNames, preferredCategories []string,
+	preferredCategories []string,
 ) BankAccountRow {
-	if bucketNames == nil {
-		bucketNames = []string{}
-	}
 	if preferredCategories == nil {
 		preferredCategories = []string{}
 	}
@@ -110,7 +95,6 @@ func mapBankAccountRow(
 		Balance:             balance,
 		CreditsThisMonth:    0,
 		DebitsThisMonth:     0,
-		BucketNames:         bucketNames,
 		PreferredCategories: preferredCategories,
 	}
 }
@@ -131,15 +115,15 @@ func ListBankAccounts(ctx context.Context, pool *pgxpool.Pool, userID string) ([
 		var (
 			id, name, description, accountType string
 			balance                            float64
-			bucketNames, preferredCategories   []string
+			preferredCategories                  []string
 		)
 		if err := rows.Scan(
 			&id, &name, &description, &accountType, &balance,
-			&bucketNames, &preferredCategories,
+			&preferredCategories,
 		); err != nil {
 			return nil, err
 		}
-		out = append(out, mapBankAccountRow(id, name, description, accountType, balance, bucketNames, preferredCategories))
+		out = append(out, mapBankAccountRow(id, name, description, accountType, balance, preferredCategories))
 	}
 	return out, rows.Err()
 }
@@ -154,11 +138,11 @@ func GetBankAccountByID(ctx context.Context, pool *pgxpool.Pool, userID, account
 	var (
 		id, name, description, accountType string
 		balance                            float64
-		bucketNames, preferredCategories   []string
+		preferredCategories                  []string
 	)
 	err := row.Scan(
 		&id, &name, &description, &accountType, &balance,
-		&bucketNames, &preferredCategories,
+		&preferredCategories,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -166,7 +150,7 @@ func GetBankAccountByID(ctx context.Context, pool *pgxpool.Pool, userID, account
 	if err != nil {
 		return nil, err
 	}
-	r := mapBankAccountRow(id, name, description, accountType, balance, bucketNames, preferredCategories)
+	r := mapBankAccountRow(id, name, description, accountType, balance, preferredCategories)
 	return &r, nil
 }
 
@@ -263,7 +247,7 @@ func syncPreferredCategoryMappings(
 	return err
 }
 
-// CreateBankAccount inserts an account, optional buckets, and preferred categories.
+// CreateBankAccount inserts an account and preferred categories.
 func CreateBankAccount(ctx context.Context, pool *pgxpool.Pool, in CreateBankAccountInput) (*BankAccountRow, error) {
 	pc := normalizePreferredCategoryNames(in.PreferredCategories)
 	tx, err := pool.Begin(ctx)
@@ -284,19 +268,6 @@ func CreateBankAccount(ctx context.Context, pool *pgxpool.Pool, in CreateBankAcc
 		return nil, err
 	}
 
-	for _, bucketName := range in.Buckets {
-		bucketName = strings.TrimSpace(bucketName)
-		if bucketName == "" {
-			continue
-		}
-		if _, err := tx.Exec(ctx, `
-          INSERT INTO bank_account_buckets (bank_account_id, user_id, name)
-          VALUES ($1,$2,$3)
-          ON CONFLICT (bank_account_id, name) DO NOTHING
-        `, newID, in.UserID, bucketName); err != nil {
-			return nil, err
-		}
-	}
 	if err := syncPreferredCategoryMappings(ctx, tx, in.UserID, newID, pc); err != nil {
 		return nil, err
 	}
@@ -314,7 +285,7 @@ func nullIfEmptyTime(s *string) any {
 	return *s
 }
 
-// UpdateBankAccount patches fields; buckets / preferred categories use pointer-to-slice (nil = omit).
+// UpdateBankAccount patches fields; preferred categories use pointer-to-slice (nil = omit).
 func UpdateBankAccount(ctx context.Context, pool *pgxpool.Pool, in UpdateBankAccountInput) (*BankAccountRow, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -345,28 +316,6 @@ func UpdateBankAccount(ctx context.Context, pool *pgxpool.Pool, in UpdateBankAcc
 		if cmd.RowsAffected() == 0 {
 			_ = tx.Rollback(ctx)
 			return nil, nil
-		}
-	}
-
-	if in.Buckets != nil {
-		if _, err := tx.Exec(ctx,
-			`DELETE FROM bank_account_buckets WHERE bank_account_id = $1 AND user_id = $2`,
-			in.AccountID, in.UserID,
-		); err != nil {
-			return nil, err
-		}
-		for _, bucketName := range *in.Buckets {
-			bucketName = strings.TrimSpace(bucketName)
-			if bucketName == "" {
-				continue
-			}
-			if _, err := tx.Exec(ctx, `
-          INSERT INTO bank_account_buckets (bank_account_id, user_id, name)
-          VALUES ($1,$2,$3)
-          ON CONFLICT (bank_account_id, name) DO NOTHING
-        `, in.AccountID, in.UserID, bucketName); err != nil {
-				return nil, err
-			}
 		}
 	}
 

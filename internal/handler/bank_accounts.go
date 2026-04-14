@@ -133,7 +133,6 @@ type patchBankAccountBody struct {
 	Balance              *float64   `json:"balance"`
 	LastDebitAt          *string    `json:"lastDebitAt"`
 	LastCreditAt         *string    `json:"lastCreditAt"`
-	Buckets              *[]string  `json:"buckets"`
 	PreferredCategories  *[]string  `json:"preferredCategories"`
 }
 
@@ -189,7 +188,6 @@ func (h *BankAccounts) patch(w http.ResponseWriter, r *http.Request) {
 		Balance:      body.Balance,
 		LastDebitAt:  body.LastDebitAt,
 		LastCreditAt: body.LastCreditAt,
-		Buckets:      body.Buckets,
 		PreferredCat: body.PreferredCategories,
 	}
 

@@ -1,4 +1,4 @@
--- Bank accounts and virtual buckets.
+-- Bank accounts.
 
 DO $$
 BEGIN
@@ -27,19 +27,3 @@ CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_id
 
 CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_type
   ON bank_accounts(user_id, account_type);
-
-CREATE TABLE IF NOT EXISTS bank_account_buckets (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  bank_account_id UUID NOT NULL REFERENCES bank_accounts(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  allocated_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_bank_account_buckets_account_id
-  ON bank_account_buckets(bank_account_id);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_account_buckets_unique_name_per_account
-  ON bank_account_buckets(bank_account_id, name);
