@@ -1,4 +1,6 @@
-FROM golang:1.24-alpine AS builder
+# Production / release API image (used by prod Compose and as the HTTP dependency in test Compose).
+FROM golang:alpine AS builder
+ENV GOTOOLCHAIN=auto
 
 RUN apk add --no-cache ca-certificates git
 

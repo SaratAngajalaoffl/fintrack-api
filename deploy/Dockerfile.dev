@@ -1,0 +1,20 @@
+# Development API: rebuilds and restarts on Go source changes (Air). Dev Compose bind-mounts the repo over /src.
+FROM golang:alpine
+ENV GOTOOLCHAIN=auto
+
+RUN apk add --no-cache ca-certificates git wget
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+RUN go install github.com/air-verse/air@v1.61.7
+
+COPY . .
+
+ENV PATH="/go/bin:${PATH}"
+
+EXPOSE 8000
+
+CMD ["air", "-c", ".air.toml"]

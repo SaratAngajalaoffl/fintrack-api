@@ -1,0 +1,18 @@
+# One-shot image: full Go test suite + junit.xml (gotestsum). Integration tests need the host Docker socket at run time.
+FROM golang:alpine
+ENV GOTOOLCHAIN=auto
+
+RUN apk add --no-cache ca-certificates git docker-cli
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+RUN go install gotest.tools/gotestsum@v1.12.3
+ENV PATH="/go/bin:${PATH}"
+
+COPY . .
+
+# GitHub Actions: test-summary/action reads api/junit.xml (Compose bind-mounts api/ → /src).
+CMD ["sh", "-c", "gotestsum --format standard-verbose --junitfile junit.xml -- -count=1 ./..."]

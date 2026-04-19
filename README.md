@@ -28,7 +28,11 @@ go run ./cmd/api
 
 ## Docker / Compose
 
-The API image is defined in **`api/deploy/Dockerfile`**. **Build context:** **`api/`** (module root). Example: `docker build -f deploy/Dockerfile .` from **`api/`**. **`api/.dockerignore`** trims the context. Compose stacks live at the repo root in **`deploy/`** (e.g. **`deploy/docker-compose.dev.yml`**). In Compose, **`DATABASE_URL`** targets the `postgres` service; SQL files are copied from the builder stage to **`/migrations`** in the runtime image, and dev Compose can bind-mount **`api/migrations`** there for local edits without rebuilding.
+- **`api/deploy/Dockerfile.prod`** — release image (multi-stage build, **`/migrations`** baked in). Example: `docker build -f deploy/Dockerfile.prod .` from **`api/`**.
+- **`api/deploy/Dockerfile.dev`** — **Air** live reload (`api/.air.toml`); **`deploy/docker-compose.dev.yml`** bind-mounts **`api/`** → **`/src`**.
+- **`api/deploy/Dockerfile.test`** — one-shot **`gotestsum`** + **`junit.xml`**. Mount the host Docker socket when running the container (integration tests use **testcontainers**). From the repo root: `docker compose -f deploy/docker-compose.test.yml --profile go-tests run --rm api-go-tests` (same path as **`.github/workflows/ci.yml`**). **`test-summary/action`** reads **`api/junit.xml`** after Compose (**`api/`** bind-mounted to **`/src`**).
+
+**Build context:** **`api/`** (module root). **`api/.dockerignore`** trims the context. Compose stacks live under **`deploy/`**. In Compose, **`DATABASE_URL`** targets the **`postgres`** service where applicable.
 
 ## Makefile
 
@@ -36,7 +40,7 @@ See **`Makefile`** (`make run`, `make build`, `make test`, `make test-cover`).
 
 - **`make test`** — `go test ./...` (unit + integration; integration uses **testcontainers** and needs **Docker**).
 - **`make test-cover`** — same with **`-coverpkg=./internal/...,./pkg/...`** and writes **`coverage.out`** for `go tool cover`.
-- **`make lint`** — **`golangci-lint`** when installed, else **`go vet`**. With **Go 1.25** in **`go.mod`**, install **golangci-lint v2** (v1.x is built with Go 1.24 and errors on 1.25 projects). CI pins a v2 release in **`.github/workflows/ci.yml`**.
+- **`make lint`** — **`golangci-lint`** when installed, else **`go vet`**. With **Go 1.25** in **`go.mod`**, install **golangci-lint v2** (v1.x is built with Go 1.24 and errors on 1.25 projects).
 
 ## Seeding
 
