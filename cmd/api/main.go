@@ -1,3 +1,13 @@
+// @title Fintrack API
+// @version 1.0
+// @description HTTP API for Fintrack. Most routes require a session cookie `fintrack_session` set by login or initial bootstrap.
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey SessionCookie
+// @in cookie
+// @name fintrack_session
 package main
 
 import (
@@ -15,6 +25,8 @@ import (
 	"fintrack/api/internal/migrate"
 	"fintrack/api/internal/middleware"
 	applogger "fintrack/api/pkg/logger"
+
+	_ "fintrack/api/docs"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

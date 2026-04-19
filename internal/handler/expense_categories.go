@@ -40,6 +40,14 @@ func (h *ExpenseCategories) RegisterExpenseCategories(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/expense-categories/{categoryId}", h.remove)
 }
 
+// @Summary List expense categories
+// @Tags expense-categories
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/expense-categories [get]
 func (h *ExpenseCategories) list(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -55,6 +63,17 @@ func (h *ExpenseCategories) list(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rows": rows})
 }
 
+// @Summary Get expense category
+// @Tags expense-categories
+// @Produce json
+// @Security SessionCookie
+// @Param categoryId path string true "Category ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/expense-categories/{categoryId} [get]
 func (h *ExpenseCategories) getOne(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -86,6 +105,18 @@ type createExpenseCategoryBody struct {
 	Color       string `json:"color"`
 }
 
+// @Summary Create expense category
+// @Tags expense-categories
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "name, color, …"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/expense-categories [post]
 func (h *ExpenseCategories) create(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -143,6 +174,19 @@ type patchExpenseCategoryBody struct {
 	Color       *string `json:"color"`
 }
 
+// @Summary Update expense category
+// @Tags expense-categories
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param categoryId path string true "Category ID"
+// @Param body body map[string]interface{} true "Partial update"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/expense-categories/{categoryId} [patch]
 func (h *ExpenseCategories) patch(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -204,6 +248,17 @@ func (h *ExpenseCategories) patch(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"row": row})
 }
 
+// @Summary Delete expense category
+// @Tags expense-categories
+// @Produce json
+// @Security SessionCookie
+// @Param categoryId path string true "Category ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/expense-categories/{categoryId} [delete]
 func (h *ExpenseCategories) remove(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {

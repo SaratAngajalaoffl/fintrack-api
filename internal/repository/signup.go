@@ -16,8 +16,8 @@ func CreateUserWithProfile(ctx context.Context, pool *pgxpool.Pool, email, passw
 
 	var id string
 	err = tx.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, is_approved)
-		 VALUES ($1, $2, FALSE)
+		`INSERT INTO users (email, password_hash, is_approved, is_admin)
+		 VALUES ($1, $2, FALSE, FALSE)
 		 RETURNING id`,
 		email, passwordHash,
 	).Scan(&id)

@@ -28,6 +28,14 @@ func (h *CreditCards) RegisterCreditCards(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/credit-cards/{cardId}", h.remove)
 }
 
+// @Summary List credit cards
+// @Tags credit-cards
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/credit-cards [get]
 func (h *CreditCards) list(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -43,6 +51,17 @@ func (h *CreditCards) list(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rows": rows})
 }
 
+// @Summary Get credit card
+// @Tags credit-cards
+// @Produce json
+// @Security SessionCookie
+// @Param cardId path string true "Credit card ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/credit-cards/{cardId} [get]
 func (h *CreditCards) getOne(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -78,6 +97,17 @@ type createCreditCardBody struct {
 	BillDueDay          *float64 `json:"billDueDay"`
 }
 
+// @Summary Create credit card
+// @Tags credit-cards
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "Card fields per API contract"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/credit-cards [post]
 func (h *CreditCards) create(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -168,6 +198,19 @@ type patchCreditCardBody struct {
 	BillDueDay          *float64  `json:"billDueDay"`
 }
 
+// @Summary Update credit card
+// @Tags credit-cards
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param cardId path string true "Credit card ID"
+// @Param body body map[string]interface{} true "Partial update"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/credit-cards/{cardId} [patch]
 func (h *CreditCards) patch(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -259,6 +302,17 @@ func (h *CreditCards) patch(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"row": row})
 }
 
+// @Summary Delete credit card
+// @Tags credit-cards
+// @Produce json
+// @Security SessionCookie
+// @Param cardId path string true "Credit card ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/credit-cards/{cardId} [delete]
 func (h *CreditCards) remove(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {

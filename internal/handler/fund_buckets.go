@@ -28,6 +28,14 @@ func (h *FundBuckets) RegisterFundBuckets(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/fund-buckets/{bucketId}/priority", h.setPriority)
 }
 
+// @Summary List fund buckets
+// @Tags fund-buckets
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/fund-buckets [get]
 func (h *FundBuckets) list(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -62,6 +70,19 @@ func parseFundBucketPriority(v string) (string, bool) {
 	}
 }
 
+// @Summary Create fund bucket
+// @Tags fund-buckets
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "name, targetAmount, bankAccountId, priority"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/fund-buckets [post]
 func (h *FundBuckets) create(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -121,6 +142,20 @@ type allocateBody struct {
 	Amount float64 `json:"amount"`
 }
 
+// @Summary Allocate funds into bucket
+// @Tags fund-buckets
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param bucketId path string true "Fund bucket ID"
+// @Param body body map[string]interface{} true "amount"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/fund-buckets/{bucketId}/allocate [post]
 func (h *FundBuckets) allocate(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -163,6 +198,18 @@ func (h *FundBuckets) allocate(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"row": row})
 }
 
+// @Summary Unlock fund bucket
+// @Tags fund-buckets
+// @Produce json
+// @Security SessionCookie
+// @Param bucketId path string true "Fund bucket ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/fund-buckets/{bucketId}/unlock [post]
 func (h *FundBuckets) unlock(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -193,6 +240,19 @@ type priorityBody struct {
 	Priority string `json:"priority"`
 }
 
+// @Summary Set fund bucket priority
+// @Tags fund-buckets
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param bucketId path string true "Fund bucket ID"
+// @Param body body map[string]interface{} true "priority (high|medium|low)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/fund-buckets/{bucketId}/priority [patch]
 func (h *FundBuckets) setPriority(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {

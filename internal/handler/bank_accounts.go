@@ -28,6 +28,14 @@ func (h *BankAccounts) RegisterBankAccounts(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/bank-accounts/{accountId}", h.remove)
 }
 
+// @Summary List bank accounts
+// @Tags bank-accounts
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/bank-accounts [get]
 func (h *BankAccounts) list(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -43,6 +51,17 @@ func (h *BankAccounts) list(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rows": rows})
 }
 
+// @Summary Get bank account
+// @Tags bank-accounts
+// @Produce json
+// @Security SessionCookie
+// @Param accountId path string true "Bank account ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/bank-accounts/{accountId} [get]
 func (h *BankAccounts) getOne(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -75,6 +94,17 @@ type createBankAccountBody struct {
 	PreferredCategories []string `json:"preferredCategories"`
 }
 
+// @Summary Create bank account
+// @Tags bank-accounts
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "name, description, initialBalance, accountType, preferredCategories"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/bank-accounts [post]
 func (h *BankAccounts) create(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -136,6 +166,19 @@ type patchBankAccountBody struct {
 	PreferredCategories  *[]string  `json:"preferredCategories"`
 }
 
+// @Summary Update bank account
+// @Tags bank-accounts
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param accountId path string true "Bank account ID"
+// @Param body body map[string]interface{} true "Partial update fields"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/bank-accounts/{accountId} [patch]
 func (h *BankAccounts) patch(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {
@@ -210,6 +253,17 @@ func (h *BankAccounts) patch(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"row": row})
 }
 
+// @Summary Delete bank account
+// @Tags bank-accounts
+// @Produce json
+// @Security SessionCookie
+// @Param accountId path string true "Bank account ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/bank-accounts/{accountId} [delete]
 func (h *BankAccounts) remove(w http.ResponseWriter, r *http.Request) {
 	sess, ok := requireSession(w, r, h.JWTSecret)
 	if !ok {

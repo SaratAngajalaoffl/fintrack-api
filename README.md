@@ -9,6 +9,7 @@ SQL migrations are under **`migrations/`** at the root of this repository.
 - **`cmd/api/`** — `main.go` entrypoint: config, DB pool, **run migrations**, HTTP server.
 - **`internal/`** — app code not imported by other modules: `config`, `handler`, `middleware`, `migrate`, `model`, `repository`, `service`.
 - **`pkg/`** — small reusable packages (`logger`, `validator`, …).
+- **`docs/`** — generated **Swagger / OpenAPI 2.0** bundle (`docs.go`, `swagger.json`, `swagger.yaml`) from [swag](https://github.com/swaggo/swag); UI at **`/swagger/`** when the API is running.
 
 ## Run locally
 
@@ -21,6 +22,7 @@ go run ./cmd/api
 ```
 
 - **Health:** `GET http://localhost:8080/health`
+- **Swagger UI:** `http://localhost:8080/swagger/index.html` (OpenAPI spec: `/swagger/doc.json`). Regenerate after changing route comments: **`make swagger`** (from **`api/`**).
 - **Auth:** **`/api/auth/*`** (session cookie `fintrack_session`, bcrypt passwords, JWT OTP tickets).
 - **Bank accounts, credit cards, expense categories:** CRUD-style **`/api/...`** routes (see **`web/src/configs/api-routes.ts`** in **fintrack-web**).
 - **Fund buckets:** list/create plus **`/allocate`**, **`/unlock`**, **`/priority`** actions.

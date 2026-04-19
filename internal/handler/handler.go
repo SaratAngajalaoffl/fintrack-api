@@ -16,6 +16,7 @@ type Deps struct {
 // NewMux registers application routes (Go 1.22+ route patterns).
 func NewMux(deps Deps) http.Handler {
 	mux := http.NewServeMux()
+	RegisterSwagger(mux)
 	mux.HandleFunc("GET /health", Health)
 
 	if deps.DB != nil && len(deps.JWTSecret) > 0 {

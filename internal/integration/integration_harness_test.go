@@ -38,7 +38,8 @@ type harness struct {
 	Pool    *pgxpool.Pool
 }
 
-func newHarness(t *testing.T) *harness {
+// newHarnessBare returns a test server against an empty migrated database (no bootstrap user).
+func newHarnessBare(t *testing.T) *harness {
 	t.Helper()
 	pool, cleanup := poolWithMigrations(t)
 	mux := handler.NewMux(handler.Deps{
@@ -62,6 +63,36 @@ func newHarness(t *testing.T) *harness {
 		srv.Close()
 		cleanup()
 	})
+	return h
+}
+
+func ensureIntegrationBootstrapUser(t *testing.T, h *harness) {
+	t.Helper()
+	ctx := context.Background()
+	var n int64
+	if err := h.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n > 0 {
+		return
+	}
+	email := fmt.Sprintf("it-bootstrap-%d@example.com", time.Now().UnixNano())
+	body := fmt.Sprintf(
+		`{"email":%q,"password":"password123","name":"IT Admin","preferredCurrency":"USD"}`,
+		email,
+	)
+	res, err := h.postJSON("/api/auth/bootstrap", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusOK)
+}
+
+// newHarness returns a server with at least one user so signup/login tests can run against an empty install policy.
+func newHarness(t *testing.T) *harness {
+	t.Helper()
+	h := newHarnessBare(t)
+	ensureIntegrationBootstrapUser(t, h)
 	return h
 }
 

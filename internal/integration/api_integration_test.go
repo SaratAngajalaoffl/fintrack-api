@@ -25,6 +25,85 @@ func TestAPI_GET_health(t *testing.T) {
 	}
 }
 
+func TestAPI_GET_auth_bootstrap_status_empty(t *testing.T) {
+	h := newHarnessBare(t)
+	res, err := h.get("/api/auth/bootstrap-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := mustStatus(t, res, http.StatusOK)
+	var wrap struct {
+		NeedsBootstrap bool `json:"needsBootstrap"`
+	}
+	if err := json.Unmarshal(b, &wrap); err != nil {
+		t.Fatal(err)
+	}
+	if !wrap.NeedsBootstrap {
+		t.Fatalf("needsBootstrap want true got %+v", wrap)
+	}
+}
+
+func TestAPI_POST_auth_bootstrap_creates_admin_session(t *testing.T) {
+	h := newHarnessBare(t)
+	email := uniqueEmail()
+	body := fmt.Sprintf(
+		`{"email":%q,"password":"password123","name":"Bootstrap Admin","preferredCurrency":"EUR"}`,
+		email,
+	)
+	res, err := h.postJSON("/api/auth/bootstrap", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusOK)
+
+	res, err = h.get("/api/auth/bootstrap-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := mustStatus(t, res, http.StatusOK)
+	var st struct {
+		NeedsBootstrap bool `json:"needsBootstrap"`
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.NeedsBootstrap {
+		t.Fatal("needsBootstrap should be false after bootstrap")
+	}
+
+	res, err = h.postJSON("/api/auth/bootstrap", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusNotFound)
+
+	res, err = h.get("/api/auth/me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = mustStatus(t, res, http.StatusOK)
+	var me struct {
+		User map[string]any `json:"user"`
+	}
+	if err := json.Unmarshal(b, &me); err != nil {
+		t.Fatal(err)
+	}
+	if me.User["isAdmin"] != true {
+		t.Fatalf("isAdmin want true got %v", me.User["isAdmin"])
+	}
+}
+
+func TestAPI_POST_auth_signup_forbidden_when_no_users(t *testing.T) {
+	h := newHarnessBare(t)
+	email := uniqueEmail()
+	body := fmt.Sprintf(`{"email":%q,"password":"password123","name":"X","preferredCurrency":"USD"}`, email)
+	res, err := h.postJSON("/api/auth/signup", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusForbidden)
+}
+
 func TestAPI_POST_auth_signup(t *testing.T) {
 	h := newHarness(t)
 	email := uniqueEmail()

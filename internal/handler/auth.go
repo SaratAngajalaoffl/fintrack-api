@@ -43,8 +43,22 @@ func (a *Auth) RegisterAuth(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/change-password", a.postChangePassword)
 	mux.HandleFunc("GET /api/auth/account-data", a.getAccountData)
 	mux.HandleFunc("DELETE /api/auth/account-data", a.deleteAccountData)
+	mux.HandleFunc("GET /api/auth/bootstrap-status", a.getBootstrapStatus)
+	mux.HandleFunc("POST /api/auth/bootstrap", a.postBootstrap)
 }
 
+// postLogin issues a session cookie on success.
+// @Summary Log in
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} true "JSON with email and password"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/login [post]
 func (a *Auth) postLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var body struct {
@@ -96,8 +110,146 @@ func (a *Auth) postLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary Bootstrap status
+// @Description Returns whether the database has zero users (initial setup required).
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]bool
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/bootstrap-status [get]
+func (a *Auth) getBootstrapStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	n, err := repository.CountUsers(ctx, a.DB)
+	if err != nil {
+		slog.Error("bootstrap status count", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"needsBootstrap": n == 0})
+}
+
+// postBootstrap creates the first administrator when no users exist.
+// @Summary Initial bootstrap (first admin)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} true "email, password, name, preferredCurrency"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/bootstrap [post]
+func (a *Auth) postBootstrap(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	n, err := repository.CountUsers(ctx, a.DB)
+	if err != nil {
+		slog.Error("bootstrap count", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	if n > 0 {
+		httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "Initial setup is not available."})
+		return
+	}
+
+	var body struct {
+		Email             string `json:"email"`
+		Password          string `json:"password"`
+		Name              string `json:"name"`
+		PreferredCurrency string `json:"preferredCurrency"`
+	}
+	if err := httpx.ReadJSON(r, &body); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+		return
+	}
+	if msg := auth.ValidateEmail(body.Email); msg != "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+		return
+	}
+	if msg := auth.ValidatePassword(body.Password); msg != "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+		return
+	}
+	if msg := auth.ValidateProfileName(body.Name); msg != "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+		return
+	}
+	if msg := auth.ValidatePreferredCurrency(body.PreferredCurrency); msg != "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+		return
+	}
+	email := auth.NormalizeEmail(body.Email)
+	pw, err := auth.HashPassword(body.Password)
+	if err != nil {
+		slog.Error("hash bootstrap", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	name := auth.NormalizeProfileName(body.Name)
+	curr := auth.ParsePreferredCurrency(body.PreferredCurrency)
+	err = repository.BootstrapAdminWithProfile(ctx, a.DB, email, pw, name, curr)
+	if err != nil {
+		if errors.Is(err, repository.ErrBootstrapUnavailable) {
+			httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "Initial setup is not available."})
+			return
+		}
+		if repository.IsUniqueViolation(err) {
+			httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": "An account with this email already exists"})
+			return
+		}
+		slog.Error("bootstrap", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	user, err := repository.FindUserByEmail(ctx, a.DB, email)
+	if err != nil || user == nil {
+		slog.Error("bootstrap find user", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	tok, err := auth.SignSessionToken(a.JWTSecret, user.ID, auth.NormalizeEmail(user.Email))
+	if err != nil {
+		slog.Error("sign session bootstrap", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	writeSessionCookie(w, tok, a.CookieSecure)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"user": map[string]any{
+			"id":       user.ID,
+			"email":    auth.NormalizeEmail(user.Email),
+			"isAdmin":  user.IsAdmin,
+			"isApproved": user.IsApproved,
+		},
+	})
+}
+
+// @Summary Sign up
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} true "Signup fields per API contract"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/signup [post]
 func (a *Auth) postSignup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	n, err := repository.CountUsers(ctx, a.DB)
+	if err != nil {
+		slog.Error("signup count", "error", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "Server error"})
+		return
+	}
+	if n == 0 {
+		httpx.WriteJSON(w, http.StatusForbidden, map[string]string{
+			"error": "Complete initial setup on the setup page before creating an account.",
+		})
+		return
+	}
 	var body struct {
 		Email             string `json:"email"`
 		Password          string `json:"password"`
@@ -149,11 +301,24 @@ func (a *Auth) postSignup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary Log out
+// @Description Clears the session cookie.
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]bool
+// @Router /api/auth/logout [post]
 func (a *Auth) postLogout(w http.ResponseWriter, r *http.Request) {
 	clearSessionCookie(w, a.CookieSecure)
 	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// @Summary Current user
+// @Description Returns user and profile when a valid session cookie is present; otherwise user is null with 200.
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/me [get]
 func (a *Auth) getMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)
@@ -182,12 +347,24 @@ func (a *Auth) getMe(w http.ResponseWriter, r *http.Request) {
 			"id":                 user.ID,
 			"email":              auth.NormalizeEmail(user.Email),
 			"isApproved":         user.IsApproved,
+			"isAdmin":            user.IsAdmin,
 			"name":               name,
 			"preferredCurrency":  pc,
 		},
 	})
 }
 
+// @Summary Update profile
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "Optional name, preferredCurrency"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/me [patch]
 func (a *Auth) patchMe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)
@@ -266,12 +443,22 @@ func (a *Auth) patchMe(w http.ResponseWriter, r *http.Request) {
 			"id":                 user.ID,
 			"email":              normalizedEmail,
 			"isApproved":         user.IsApproved,
+			"isAdmin":            user.IsAdmin,
 			"name":               displayName,
 			"preferredCurrency":  pc,
 		},
 	})
 }
 
+// @Summary Request password reset
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} true "email"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/forgot-password [post]
 func (a *Auth) postForgotPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var body struct {
@@ -314,6 +501,15 @@ func (a *Auth) postForgotPassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary Reset password with OTP
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body map[string]interface{} true "email, otp, newPassword, otpToken"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/reset-password [post]
 func (a *Auth) postResetPassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var body struct {
@@ -370,6 +566,14 @@ func (a *Auth) postResetPassword(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary Request OTP for change password (authenticated)
+// @Tags auth
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/change-password/request-otp [post]
 func (a *Auth) postChangePasswordRequestOtp(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)
@@ -396,6 +600,17 @@ func (a *Auth) postChangePasswordRequestOtp(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// @Summary Change password with OTP (authenticated)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "newPassword, otp, otpToken"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/change-password [post]
 func (a *Auth) postChangePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)
@@ -446,6 +661,15 @@ func (a *Auth) postChangePassword(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "Password changed."})
 }
 
+// @Summary Export account JSON
+// @Description Returns a downloadable JSON export of the signed-in user's data.
+// @Tags auth
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {string} string "JSON attachment"
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/account-data [get]
 func (a *Auth) getAccountData(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)
@@ -471,6 +695,15 @@ func (a *Auth) getAccountData(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(raw)
 }
 
+// @Summary Delete account
+// @Description Permanently deletes the signed-in user and clears the session cookie.
+// @Tags auth
+// @Produce json
+// @Security SessionCookie
+// @Success 200 {object} map[string]bool
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/account-data [delete]
 func (a *Auth) deleteAccountData(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sess, err := a.session(r)

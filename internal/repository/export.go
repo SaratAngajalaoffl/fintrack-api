@@ -23,15 +23,16 @@ func ExportAccountPayload(ctx context.Context, pool *pgxpool.Pool, userID string
 		Email        string `json:"email"`
 		PasswordHash string `json:"passwordHash"`
 		IsApproved   bool   `json:"isApproved"`
+		IsAdmin      bool   `json:"isAdmin"`
 		CreatedAt    string `json:"createdAt"`
 		UpdatedAt    string `json:"updatedAt"`
 	}
 	var u userRow
 	err = tx.QueryRow(ctx,
-		`SELECT id, email, password_hash, is_approved, created_at::text, updated_at::text
+		`SELECT id, email, password_hash, is_approved, is_admin, created_at::text, updated_at::text
 		 FROM users WHERE id = $1 LIMIT 1`,
 		userID,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.IsApproved, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.IsApproved, &u.IsAdmin, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
