@@ -31,6 +31,7 @@ type BankAccountRow struct {
 	Balance             float64  `json:"balance"`
 	CreditsThisMonth    float64  `json:"creditsThisMonth"`
 	DebitsThisMonth     float64  `json:"debitsThisMonth"`
+	BucketNames         []string `json:"bucketNames"`
 	PreferredCategories []string `json:"preferredCategories"`
 }
 
@@ -65,6 +66,12 @@ const bankAccountSelect = `
         ba.account_type::text,
         ba.balance::float8,
         COALESCE(
+          ARRAY_AGG(DISTINCT fb.name ORDER BY fb.name) FILTER (
+            WHERE fb.name IS NOT NULL
+          ),
+          '{}'
+        ) AS bucket_names,
+        COALESCE(
           ARRAY_AGG(DISTINCT ec.name ORDER BY ec.name) FILTER (
             WHERE ec.name IS NOT NULL
           ),
@@ -74,6 +81,9 @@ const bankAccountSelect = `
       LEFT JOIN bank_account_preferred_categories bapc
         ON bapc.bank_account_id = ba.id
        AND bapc.user_id = ba.user_id
+      LEFT JOIN fund_buckets fb
+        ON fb.bank_account_id = ba.id
+       AND fb.user_id = ba.user_id
       LEFT JOIN expense_categories ec
         ON ec.id = bapc.expense_category_id
        AND ec.user_id = ba.user_id
@@ -82,8 +92,12 @@ const bankAccountSelect = `
 func mapBankAccountRow(
 	id, name, description, accountType string,
 	balance float64,
+	bucketNames []string,
 	preferredCategories []string,
 ) BankAccountRow {
+	if bucketNames == nil {
+		bucketNames = []string{}
+	}
 	if preferredCategories == nil {
 		preferredCategories = []string{}
 	}
@@ -95,6 +109,7 @@ func mapBankAccountRow(
 		Balance:             balance,
 		CreditsThisMonth:    0,
 		DebitsThisMonth:     0,
+		BucketNames:         bucketNames,
 		PreferredCategories: preferredCategories,
 	}
 }
@@ -115,15 +130,16 @@ func ListBankAccounts(ctx context.Context, pool *pgxpool.Pool, userID string) ([
 		var (
 			id, name, description, accountType string
 			balance                            float64
+			bucketNames                        []string
 			preferredCategories                  []string
 		)
 		if err := rows.Scan(
 			&id, &name, &description, &accountType, &balance,
-			&preferredCategories,
+			&bucketNames, &preferredCategories,
 		); err != nil {
 			return nil, err
 		}
-		out = append(out, mapBankAccountRow(id, name, description, accountType, balance, preferredCategories))
+		out = append(out, mapBankAccountRow(id, name, description, accountType, balance, bucketNames, preferredCategories))
 	}
 	return out, rows.Err()
 }
@@ -138,11 +154,12 @@ func GetBankAccountByID(ctx context.Context, pool *pgxpool.Pool, userID, account
 	var (
 		id, name, description, accountType string
 		balance                            float64
+		bucketNames                        []string
 		preferredCategories                  []string
 	)
 	err := row.Scan(
 		&id, &name, &description, &accountType, &balance,
-		&preferredCategories,
+		&bucketNames, &preferredCategories,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -150,7 +167,7 @@ func GetBankAccountByID(ctx context.Context, pool *pgxpool.Pool, userID, account
 	if err != nil {
 		return nil, err
 	}
-	r := mapBankAccountRow(id, name, description, accountType, balance, preferredCategories)
+	r := mapBankAccountRow(id, name, description, accountType, balance, bucketNames, preferredCategories)
 	return &r, nil
 }
 

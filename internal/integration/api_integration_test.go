@@ -395,7 +395,23 @@ func TestAPI_GET_bank_accounts_list(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustStatus(t, res, http.StatusOK)
+	b := mustStatus(t, res, http.StatusOK)
+	var listWrap struct {
+		Rows []map[string]any `json:"rows"`
+	}
+	if err := json.Unmarshal(b, &listWrap); err != nil {
+		t.Fatal(err)
+	}
+	if len(listWrap.Rows) != 1 {
+		t.Fatalf("expected one bank account row, got %d", len(listWrap.Rows))
+	}
+	bucketNames, ok := listWrap.Rows[0]["bucketNames"].([]any)
+	if !ok {
+		t.Fatalf("bucketNames should be an array, got %T", listWrap.Rows[0]["bucketNames"])
+	}
+	if len(bucketNames) != 0 {
+		t.Fatalf("expected empty bucketNames for new account, got %d", len(bucketNames))
+	}
 }
 
 func TestAPI_GET_bank_accounts_byID(t *testing.T) {
@@ -766,6 +782,13 @@ func TestAPI_GET_auth_account_data(t *testing.T) {
 	if export["schemaVersion"].(float64) != 1 {
 		t.Fatalf("schema: %v", export["schemaVersion"])
 	}
+	fundBuckets, ok := export["fundBuckets"].([]any)
+	if !ok {
+		t.Fatalf("fundBuckets should be an array, got %T", export["fundBuckets"])
+	}
+	if len(fundBuckets) != 0 {
+		t.Fatalf("expected no fundBuckets for new account, got %d", len(fundBuckets))
+	}
 }
 
 func TestAPI_DELETE_auth_account_data(t *testing.T) {
@@ -776,6 +799,61 @@ func TestAPI_DELETE_auth_account_data(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustStatus(t, res, http.StatusOK)
+}
+
+func TestAPI_POST_auth_account_data_import_admin(t *testing.T) {
+	h := newHarnessBare(t)
+	adminEmail := uniqueEmail()
+	bootstrapBody := fmt.Sprintf(
+		`{"email":%q,"password":"password123","name":"Bootstrap Admin","preferredCurrency":"USD"}`,
+		adminEmail,
+	)
+	res, err := h.postJSON("/api/auth/bootstrap", bootstrapBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusOK)
+
+	res, err = h.postJSON("/api/expense-categories", `{"name":"Groceries","description":"d","iconUrl":"/icons/g.png","color":"green"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusCreated)
+
+	res, err = h.get("/api/auth/account-data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported := mustStatus(t, res, http.StatusOK)
+
+	_, err = h.Pool.Exec(context.Background(), `DELETE FROM expense_categories`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err = h.postRaw("/api/auth/account-data/import", "application/json", exported)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusOK)
+
+	var count int
+	if err := h.Pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM expense_categories`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one imported expense category, got %d", count)
+	}
+}
+
+func TestAPI_POST_auth_account_data_import_non_admin_forbidden(t *testing.T) {
+	h := newHarness(t)
+	signupApproveLogin(t, h)
+	res, err := h.postRaw("/api/auth/account-data/import", "application/json", []byte(`{"schemaVersion":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, res, http.StatusForbidden)
 }
 
 func TestRepository_ExportAccountPayload(t *testing.T) {

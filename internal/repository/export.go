@@ -174,7 +174,7 @@ func collectFundBuckets(ctx context.Context, tx pgx.Tx, userID string) ([]map[st
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := make([]map[string]any, 0)
 	for rows.Next() {
 		var (
 			id, uid, baid, name, target, current, pri, created, updated string

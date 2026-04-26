@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,9 +18,9 @@ import (
 
 // Auth holds auth route dependencies.
 type Auth struct {
-	DB            *pgxpool.Pool
-	JWTSecret     []byte
-	CookieSecure  bool
+	DB           *pgxpool.Pool
+	JWTSecret    []byte
+	CookieSecure bool
 }
 
 func (a *Auth) session(r *http.Request) (*auth.SessionPayload, error) {
@@ -42,6 +43,7 @@ func (a *Auth) RegisterAuth(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/change-password/request-otp", a.postChangePasswordRequestOtp)
 	mux.HandleFunc("POST /api/auth/change-password", a.postChangePassword)
 	mux.HandleFunc("GET /api/auth/account-data", a.getAccountData)
+	mux.HandleFunc("POST /api/auth/account-data/import", a.postImportAccountData)
 	mux.HandleFunc("DELETE /api/auth/account-data", a.deleteAccountData)
 	mux.HandleFunc("GET /api/auth/bootstrap-status", a.getBootstrapStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", a.postBootstrap)
@@ -218,9 +220,9 @@ func (a *Auth) postBootstrap(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true,
 		"user": map[string]any{
-			"id":       user.ID,
-			"email":    auth.NormalizeEmail(user.Email),
-			"isAdmin":  user.IsAdmin,
+			"id":         user.ID,
+			"email":      auth.NormalizeEmail(user.Email),
+			"isAdmin":    user.IsAdmin,
 			"isApproved": user.IsApproved,
 		},
 	})
@@ -296,7 +298,7 @@ func (a *Auth) postSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
+		"ok":      true,
 		"message": "Account created. An administrator must approve your account before you can sign in.",
 	})
 }
@@ -344,12 +346,12 @@ func (a *Auth) getMe(w http.ResponseWriter, r *http.Request) {
 	pc := auth.ParsePreferredCurrency(prof.PreferredCurrency)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
-			"id":                 user.ID,
-			"email":              auth.NormalizeEmail(user.Email),
-			"isApproved":         user.IsApproved,
-			"isAdmin":            user.IsAdmin,
-			"name":               name,
-			"preferredCurrency":  pc,
+			"id":                user.ID,
+			"email":             auth.NormalizeEmail(user.Email),
+			"isApproved":        user.IsApproved,
+			"isAdmin":           user.IsAdmin,
+			"name":              name,
+			"preferredCurrency": pc,
 		},
 	})
 }
@@ -440,12 +442,12 @@ func (a *Auth) patchMe(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true,
 		"user": map[string]any{
-			"id":                 user.ID,
-			"email":              normalizedEmail,
-			"isApproved":         user.IsApproved,
-			"isAdmin":            user.IsAdmin,
-			"name":               displayName,
-			"preferredCurrency":  pc,
+			"id":                user.ID,
+			"email":             normalizedEmail,
+			"isApproved":        user.IsApproved,
+			"isAdmin":           user.IsAdmin,
+			"name":              displayName,
+			"preferredCurrency": pc,
 		},
 	})
 }
@@ -693,6 +695,55 @@ func (a *Auth) getAccountData(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="fintrack-export-%s.json"`, date))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(raw)
+}
+
+// @Summary Import account JSON
+// @Description Replaces the signed-in administrator's account data using an export file.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security SessionCookie
+// @Param body body map[string]interface{} true "Export JSON from GET /api/auth/account-data"
+// @Success 200 {object} map[string]bool
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/auth/account-data/import [post]
+func (a *Auth) postImportAccountData(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess, err := a.session(r)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+		return
+	}
+	user, err := repository.FindUserByID(ctx, a.DB, sess.Sub)
+	if err != nil || user == nil {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+		return
+	}
+	if !user.IsAdmin {
+		httpx.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "Only administrators can import account data"})
+		return
+	}
+
+	var raw any
+	if err := httpx.ReadJSON(r, &raw); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+		return
+	}
+	serialized, err := json.Marshal(raw)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+		return
+	}
+
+	if err := repository.ImportAccountPayload(ctx, a.DB, sess.Sub, serialized); err != nil {
+		slog.Error("import account", "error", err)
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "Could not import account data"})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // @Summary Delete account

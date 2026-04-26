@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -115,6 +116,10 @@ func mustStatus(t *testing.T, res *http.Response, want int) []byte {
 
 func (h *harness) postJSON(path, body string) (*http.Response, error) {
 	return h.Client.Post(h.BaseURL+path, "application/json", strings.NewReader(body))
+}
+
+func (h *harness) postRaw(path, contentType string, body []byte) (*http.Response, error) {
+	return h.Client.Post(h.BaseURL+path, contentType, bytes.NewReader(body))
 }
 
 func (h *harness) get(path string) (*http.Response, error) {
