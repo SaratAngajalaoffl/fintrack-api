@@ -28,7 +28,7 @@ go run ./cmd/api
 - **Fund buckets:** list/create plus **`/allocate`**, **`/unlock`**, **`/priority`** actions.
 - Migrations apply automatically on startup unless **`SKIP_MIGRATIONS=true`** or **`1`**.
 
-**With the Next.js app:** run this API on **:8080** and set **fintrack-web**’s **`.env.local`** from **`.env.example`** there (**`NEXT_PUBLIC_API_ORIGIN`**, optional **`API_ORIGIN`** for server/middleware). Next validates sessions by calling **`GET /api/auth/me`** on this service (no JWT secret in Next). **`getApiRoute()`** in the web repo builds URLs for browser and server-side calls. This API sends **CORS** headers for allowed origins (see **`CORS_ALLOWED_ORIGINS`** in **`.env.example`**) when the browser calls the Go origin directly.
+**With the Next.js app:** run this API on **:8080** and set **fintrack-web**’s **`.env.local`** from **`.env.example`** there (**`API_ORIGIN`** for Next rewrites). Next validates sessions by calling **`GET /api/auth/me`** on this service (no JWT secret in Next). **`getApiRoute()`** in the web repo builds same-origin URLs that Next forwards to this API.
 
 ## Data model documentation
 
